@@ -138,6 +138,8 @@ class MeshNetworkManager(
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {}
     }
 
+    var onPeersChangedCallback: ((Set<String>) -> Unit)? = null
+
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
             connectionsClient.acceptConnection(endpointId, payloadCallback)
@@ -145,12 +147,15 @@ class MeshNetworkManager(
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             if (result.status.isSuccess) {
                 connectedPeers.add(endpointId)
+                onPeersChangedCallback?.invoke(connectedPeers.toSet())
             }
         }
         override fun onDisconnected(endpointId: String) {
             connectedPeers.remove(endpointId)
+            onPeersChangedCallback?.invoke(connectedPeers.toSet())
         }
     }
+
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
