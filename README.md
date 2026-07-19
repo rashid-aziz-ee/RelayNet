@@ -1,14 +1,14 @@
-# RelayNet
+# 📡 RelayNet
 
 **RelayNet** is an offline, peer-to-peer mesh messaging app for Android. It lets nearby devices communicate directly — over Bluetooth and WiFi Direct — with no internet connection, cellular network, or centralized server required. Messages hop from device to device across a mesh of peers, and a dedicated SOS/broadcast channel ensures emergency messages reach everyone nearby.
 
-Built for AERTHERA AI HACKATHON.
+🏆 Built for AERTHERA AI HACKATHON.
 
-## The Problem
+## 🛑 The Problem
 
 In disaster zones, remote areas, protests, or any situation where cellular and internet infrastructure is down or unavailable, people lose the ability to communicate with each other — even when they're standing just a few meters apart. RelayNet solves this by turning every phone into a relay node in a self-forming mesh network.
 
-## How It Works
+## ⚙️ How It Works
 
 - **Peer discovery & connection** — powered by Google's Nearby Connections API (`P2P_CLUSTER` strategy), automatically negotiating Bluetooth, BLE, or WiFi Direct depending on device capability and proximity.
 - **Multi-hop message relay** — messages carry a time-to-live (TTL) hop count and are flooded to connected peers, allowing a message to travel across multiple devices to reach someone out of direct range.
@@ -17,14 +17,14 @@ In disaster zones, remote areas, protests, or any situation where cellular and i
 - **Gossip-based sync** — devices exchange message ID catalogs on reconnect so any messages missed while offline get backfilled from peers (anti-entropy sync).
 - **Local persistence** — all messages are stored locally via Room, so message history survives app restarts and reconnects.
 
-## Tech Stack
+## 🛠️ Tech Stack
 
 - **Kotlin** + **Jetpack Compose** for the UI
 - **Google Nearby Connections API** for peer discovery and transport
 - **Room** for local message persistence
 - **Kotlin Coroutines** for background networking and database work
 
-## Key Features
+## 🚀 Key Features
 
 - Fully offline, no internet or cellular connection required
 - Multi-hop mesh relay (not just direct device-to-device)
@@ -34,7 +34,7 @@ In disaster zones, remote areas, protests, or any situation where cellular and i
 - Automatic reconnection handling when devices move in and out of range
 - Message history persisted across app restarts
 
-## Getting Started (Development)
+## 🏁 Getting Started (Development)
 
 1. Clone the repository:
    ```bash
@@ -45,7 +45,7 @@ In disaster zones, remote areas, protests, or any situation where cellular and i
 4. Connect at least two physical Android devices (Nearby Connections requires real hardware — it does not work reliably on emulators).
 5. Grant the app the required runtime permissions on first launch: **Nearby devices**, **Location**, and **Bluetooth**.
 
-## Building a Demo APK
+## 🏗️ Building a Demo APK
 
 To generate an installable APK for demoing on physical devices:
 
@@ -56,7 +56,7 @@ To generate an installable APK for demoing on physical devices:
    ```
 3. Transfer the APK to your test devices (USB, Bluetooth, or a shared cloud link) and install it directly. You'll need to allow **"Install from unknown sources"** on each device, since this isn't distributed via the Play Store.
 
-## Known Limitations
+## ⚠️ Known Limitations
 
 - Requires at least 2 physical Android devices for testing (no emulator support for Nearby Connections).
 - Cross-OEM Bluetooth pairing (e.g. newer vs. older Android versions/manufacturers) can occasionally be less stable due to differences in each device's Bluetooth stack.
