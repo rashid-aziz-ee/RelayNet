@@ -15,5 +15,7 @@ data class Message(
     val ttl: Int,
     val isMine: Boolean,
     val isBroadcast: Boolean,
-    val deliveryStatus: String // SENDING, SENT, RELAYED, DELIVERED
+    val deliveryStatus: String, // SENDING, SENT, RELAYED, DELIVERED
+    val recipientId: String = "",
+    val recipientName: String = ""
 )

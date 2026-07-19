@@ -19,7 +19,8 @@ import com.example.relaynet.ui.RelayViewModelFactory
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var meshManager: MeshNetworkManager
+    private var meshService: com.example.relaynet.mesh.MeshService? = null
+    private var isBound = false
     private val PERMISSION_REQUEST_CODE = 101
 
     // Initialize Room Database and DAO
@@ -36,28 +37,45 @@ class MainActivity : ComponentActivity() {
 
     // View Model with Factory to pass DAO and device configurations
     private val viewModel: RelayViewModel by viewModels {
-        RelayViewModelFactory(messageDao, myDeviceId, myName)
+        RelayViewModelFactory(messageDao, myDeviceId, myName, this)
+    }
+
+    private val serviceConnection = object : android.content.ServiceConnection {
+        override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
+            val binder = service as com.example.relaynet.mesh.MeshService.MeshBinder
+            meshService = binder.getService()
+            isBound = true
+
+            // Start mesh engine through service
+            meshService?.startMeshEngine { incomingEnvelope ->
+                viewModel.onMessageReceived(incomingEnvelope)
+            }
+
+            // Bind ViewModel hooks to Service MeshManager
+            meshService?.meshManager?.let { meshManager ->
+                viewModel.sendLambda = { text ->
+                    val recipientId = viewModel.selectedRecipientId.value
+                    val recipientName = viewModel.selectedRecipientName.value
+                    meshManager.broadcastNewMessage(text, myName, recipientId, recipientName)
+                }
+
+                meshManager.onPeersChangedCallback = { peers ->
+                    viewModel.onPeersChanged(peers)
+                }
+
+                // Set initial peers
+                viewModel.onPeersChanged(meshManager.connectedPeers)
+            }
+        }
+
+        override fun onServiceDisconnected(name: android.content.ComponentName?) {
+            meshService = null
+            isBound = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Mesh Engine ko initialize karna
-        meshManager = MeshNetworkManager(this, myDeviceId) { incomingEnvelope ->
-            // Jab koi message mesh network se receive hoga, toh database aur UI updates direct call honge
-            viewModel.onMessageReceived(incomingEnvelope)
-        }
-
-        // Integration Points Hook:
-        // 1. Hook Send: UI calls viewModel.onSendMessage -> calls meshManager to broadcast
-        viewModel.sendLambda = { text ->
-            meshManager.broadcastNewMessage(text, myName)
-        }
-
-        // 2. Hook Peer changes: callback inside MeshNetworkManager forwards list of peers to ViewModel
-        meshManager.onPeersChangedCallback = { peers ->
-            viewModel.onPeersChanged(peers)
-        }
 
         // Compose content set karna
         setContent {
@@ -68,11 +86,41 @@ class MainActivity : ComponentActivity() {
 
         // Permissions check karke mesh network start karna
         if (checkPermissions()) {
-            meshManager.startMesh()
+            startAndBindMeshService()
             Toast.makeText(this, "Mesh Network Started As: $myName", Toast.LENGTH_SHORT).show()
         } else {
             requestRequiredPermissions()
         }
+    }
+
+    // NEW: restart discovery/advertising whenever the app comes back to the foreground.
+    // Nearby Connections' session can go stale after the app is backgrounded (screen lock,
+    // switching apps, etc.), which previously required a full force-stop + relaunch to
+    // recover. Re-calling startMesh() here re-establishes advertising/discovery cleanly
+    // without needing that manual workaround.
+    override fun onResume() {
+        super.onResume()
+        if (isBound) {
+            meshService?.meshManager?.restartMesh()
+        }
+    }
+
+    private fun startAndBindMeshService() {
+        val serviceIntent = android.content.Intent(this, com.example.relaynet.mesh.MeshService::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
+        bindService(serviceIntent, serviceConnection, android.content.Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onDestroy() {
+        if (isBound) {
+            unbindService(serviceConnection)
+            isBound = false
+        }
+        super.onDestroy()
     }
 
     // --- Permissions Handling Logic ---
@@ -91,6 +139,7 @@ class MainActivity : ComponentActivity() {
             // Android 12+ permissions
             arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
@@ -100,6 +149,7 @@ class MainActivity : ComponentActivity() {
             // Legacy/Old Android permissions
             arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
                 Manifest.permission.BLUETOOTH,
                 Manifest.permission.BLUETOOTH_ADMIN
             )
@@ -112,12 +162,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) { // Fixed typo: PERMISSION_REQUEST_CODES to PERMISSION_REQUEST_CODE
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                meshManager.startMesh()
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            val allGranted = grantResults.isNotEmpty() &&
+                    grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+
+            if (allGranted) {
+                startAndBindMeshService()
                 Toast.makeText(this, "Permissions Granted. Mesh Started!", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Permissions Denied! Mesh cannot work.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    "Some permissions were denied. Mesh needs Bluetooth + Nearby Devices + Location to work.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }

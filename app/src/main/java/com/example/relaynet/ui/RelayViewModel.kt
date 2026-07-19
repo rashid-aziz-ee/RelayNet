@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.relaynet.MessageEnvelope
 import com.example.relaynet.data.Message
 import com.example.relaynet.data.MessageDao
+import com.example.relaynet.data.CryptoEngine
 import com.example.relaynet.mesh.MeshBridge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,7 +19,8 @@ import java.util.UUID
 class RelayViewModel(
     private val messageDao: MessageDao,
     val myDeviceId: String,
-    val myName: String
+    val myName: String,
+    private val cryptoEngine: CryptoEngine? = null
 ) : ViewModel(), MeshBridge {
 
     val messages: StateFlow<List<Message>> = messageDao.getAllMessages()
@@ -30,6 +32,23 @@ class RelayViewModel(
 
     private val _connectedPeers = MutableStateFlow<Map<String, String>>(emptyMap())
     val connectedPeers: StateFlow<Map<String, String>> = _connectedPeers.asStateFlow()
+
+    // Targeted / Private directed recipient states
+    private val _selectedRecipientId = MutableStateFlow("")
+    val selectedRecipientId = _selectedRecipientId.asStateFlow()
+
+    private val _selectedRecipientName = MutableStateFlow("")
+    val selectedRecipientName = _selectedRecipientName.asStateFlow()
+
+    fun selectRecipient(peerId: String, peerName: String) {
+        _selectedRecipientId.value = peerId
+        _selectedRecipientName.value = peerName
+    }
+
+    fun clearRecipient() {
+        _selectedRecipientId.value = ""
+        _selectedRecipientName.value = ""
+    }
 
     // Networking person will hook into this lambda in MainActivity
     var sendLambda: ((String) -> Unit)? = null
@@ -53,7 +72,9 @@ class RelayViewModel(
                 ttl = envelope.ttl,
                 isMine = isMine,
                 isBroadcast = isBroadcast,
-                deliveryStatus = if (isMine) "SENT" else "RELAYED"
+                deliveryStatus = if (isMine) "SENT" else "RELAYED",
+                recipientId = if (isBroadcast) "" else myDeviceId, // Assuming if not broadcast, it's for me
+                recipientName = if (isBroadcast) "" else myName
             )
             messageDao.insert(message)
 
@@ -72,6 +93,8 @@ class RelayViewModel(
         val messageId = UUID.randomUUID().toString()
         val isBroadcast = text.startsWith("🆘")
         val timestamp = System.currentTimeMillis()
+        val recipientId = if (isBroadcast) "" else _selectedRecipientId.value
+        val recipientName = if (isBroadcast) "" else _selectedRecipientName.value
 
         // 1. Store locally immediately as SENDING
         val message = Message(
@@ -79,12 +102,14 @@ class RelayViewModel(
             senderId = myDeviceId,
             senderName = myName,
             originTimestamp = timestamp,
-            payload = text,
+            payload = text, // Plain text saved locally for the sender
             hopCount = 0,
             ttl = 3,
             isMine = true,
             isBroadcast = isBroadcast,
-            deliveryStatus = "SENDING"
+            deliveryStatus = "SENDING",
+            recipientId = recipientId,
+            recipientName = recipientName
         )
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -112,17 +137,32 @@ class RelayViewModel(
             newMap
         }
     }
+
+    // NEW: delete a single message (e.g. long-press a bubble in ChatScreen)
+    fun deleteMessage(messageId: String) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            messageDao.deleteById(messageId)
+        }
+    }
+
+    // NEW: clear the entire local chat history (e.g. a "Clear Chat" button in the header)
+    fun clearAllMessages() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            messageDao.deleteAll()
+        }
+    }
 }
 
 class RelayViewModelFactory(
     private val messageDao: MessageDao,
     private val myDeviceId: String,
-    private val myName: String
+    private val myName: String,
+    private val context: android.content.Context
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(RelayViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return RelayViewModel(messageDao, myDeviceId, myName) as T
+            return RelayViewModel(messageDao, myDeviceId, myName, CryptoEngine(context)) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
