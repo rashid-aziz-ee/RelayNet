@@ -38,7 +38,7 @@ In disaster zones, remote areas, protests, or any situation where cellular and i
 
 1. Clone the repository:
    ```bash
-   git clone <your-repo-url>
+   git clone <https://github.com/rashid-aziz-ee/RelayNet>
    ```
 2. Open the project in Android Studio.
 3. Let Gradle sync and download dependencies.
