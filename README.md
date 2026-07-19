@@ -64,4 +64,4 @@ To generate an installable APK for demoing on physical devices:
 
 ## Team / Credits
 
-Built by [your team names] for FutureAI Global Hackathon 2026.
+Built by BC Crew for FutureAI Global Hackathon 2026.
